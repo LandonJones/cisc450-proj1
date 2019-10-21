@@ -9,7 +9,7 @@
 #include <sys/socket.h>     /* for socket, connect, send, and recv */
 #include <netinet/in.h>     /* for sockaddr_in */
 #include <unistd.h>         /* for close */
-
+#include "pkt_header.h" 
 #define STRING_SIZE 1024
 
 int main(void) {
@@ -27,7 +27,8 @@ int main(void) {
    char modifiedSentence[STRING_SIZE]; /* receive message */
    unsigned int msg_len;  /* length of message */                      
    int bytes_sent, bytes_recd; /* number of bytes sent or received */
-  
+   
+   unsigned short seq_num = 0; 
    /* open a socket */
 
    if ((sock_client = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -73,17 +74,16 @@ int main(void) {
   
    /* user interface */
 
-   printf("Please input a sentence:\n");
+   printf("Enter the file you want to receive\n");
    scanf("%s", sentence);
    msg_len = strlen(sentence) + 1;
-
+   
+   pkt_header_t* header = new_pkt((unsigned short)msg_len, seq_num); 
    /* send message */
    
-   bytes_sent = send(sock_client, sentence, msg_len, 0);
+   bytes_sent = send(sock_client, header, sizeof(header), 0);
 
    /* get response from server */
-   printf("Waiting\n"); 
-   fflush(stdout);   
    bytes_recd = recv(sock_client, modifiedSentence, STRING_SIZE, 0); 
 
    printf("\nThe response from server is:\n");

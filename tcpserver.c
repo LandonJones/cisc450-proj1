@@ -9,6 +9,7 @@
 #include <sys/socket.h>     /* for socket, bind, listen, accept */
 #include <netinet/in.h>     /* for sockaddr_in */
 #include <unistd.h>         /* for close */
+#include "pkt_header.h" 
 
 #define STRING_SIZE 1024   
 
@@ -90,20 +91,20 @@ int main(void) {
       }
  
       /* receive the message */
-
-      bytes_recd = recv(sock_connection, sentence, STRING_SIZE, 0);
+      pkt_header_t* pkt = (pkt_header_t*)malloc(sizeof(pkt_header_t)); 
+      bytes_recd = recv(sock_connection, pkt, sizeof(pkt_header_t), 0);
 
       if (bytes_recd > 0){
          printf("Received Sentence is:\n");
-         printf("%s", sentence);
+         printf("%d %d", pkt->seq_num, pkt->count);
          printf("\nwith length %d\n\n", bytes_recd);
-
+	 
         /* prepare the message to send */
 
          msg_len = bytes_recd;
 
          for (i=0; i<msg_len; i++)
-            modifiedSentence[i] = toupper (sentence[i]);
+            modifiedSentence[i] = 'A'; 
 
          /* send message */
  
