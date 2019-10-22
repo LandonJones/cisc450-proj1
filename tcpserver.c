@@ -10,6 +10,7 @@
 #include <netinet/in.h>     /* for sockaddr_in */
 #include <unistd.h>         /* for close */
 #include "pkt_header.h" 
+#include "str.h" 
 
 #define STRING_SIZE 1024   
 
@@ -38,7 +39,7 @@ int main(void) {
    unsigned int msg_len;  /* length of message */
    int bytes_sent, bytes_recd; /* number of bytes sent or received */
    unsigned int i;  /* temporary loop variable */
-
+   int seq_num = 0; 
    /* open a socket */
 
    if ((sock_server = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -93,7 +94,21 @@ int main(void) {
       /* receive the message */
       pkt_header_t* pkt = (pkt_header_t*)malloc(sizeof(pkt_header_t)); 
       bytes_recd = recv(sock_connection, pkt, sizeof(pkt_header_t), 0);
-
+      
+      char filename[STRING_SIZE]; 
+      printf("file size %hu sequence num %hu", pkt->count, pkt->seq_num); 
+      bytes_recd = recv(sock_connection, &filename, pkt->count, 0); 
+      filename[pkt->count] = '\0'; 
+      printf("The filename is: %s and %d", filename, bytes_recd);  
+      fflush(stdout); 
+      FILE* f = fopen(filename, "r"); 
+      if (f == NULL ){
+          perror("Server: error opening file"); 
+	  close(sock_connection); 
+          continue; 
+      } 
+      
+      fflush(stdout); 
       if (bytes_recd > 0){
          printf("Received Sentence is:\n");
          printf("%d %d", pkt->seq_num, pkt->count);
@@ -103,12 +118,23 @@ int main(void) {
 
          msg_len = bytes_recd;
 
-         for (i=0; i<msg_len; i++)
-            modifiedSentence[i] = 'A'; 
+         str_t* resp = readlines(f); 
+         int done = 0; 
+         while (!done){ 
+	     pkt_header_t* header = new_pkt(resp->num_chars, ++seq_num); 
 
-         /* send message */
- 
-         bytes_sent = send(sock_connection, modifiedSentence, msg_len, 0);
+             /* send message */
+ 	     bytes_sent = send(sock_connection, header, sizeof(pkt_header_t), 0); 
+             bytes_sent = send(sock_connection, resp->content, resp->num_chars, 0); 
+             if (resp->num_chars == 0){
+                 done = 1; 
+             }              
+             delete_str_t(resp); 
+             delete_pkt(header); 
+             resp = readlines(f); 
+             
+         } 
+         
       }
 
       /* close the socket */

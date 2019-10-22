@@ -12,6 +12,39 @@
 #include "pkt_header.h" 
 #define STRING_SIZE 1024
 
+/* 
+recvs a line and from the server using sock_client 
+writes the line from the server to the file pointer f
+*/ 
+int recv_line(FILE* f, int sock_client){
+    int bytes_recd; /* bytes received from the socket */ 
+    int ret; /* value to be returned */ 
+    pkt_header_t* resp_header = (pkt_header_t *)malloc(sizeof(pkt_header_t));
+    bytes_recd = recv(sock_client, resp_header, sizeof(pkt_header_t), 0);
+    char* response = (char *)malloc((resp_header->count + 1)*sizeof(char));
+    
+    bytes_recd = recv(sock_client, response, resp_header->count, 0);
+    response[resp_header->count] = '\0'; 
+    if (bytes_recd == resp_header->count){ 
+        if (bytes_recd > 0){ 
+            printf("Packet %hu received with %hu data bytes\n", resp_header->seq_num, resp_header->count); 
+            fprintf(f, "%s", response); 
+            ret = 0; 
+	} 
+        else if (strlen(response) == 0){ 
+            printf("End of Transmission Packet with sequence number %hu received with %hu data bytes\n", resp_header->seq_num, resp_header->count); 
+            ret = -1; 
+        } 
+    }
+    else{ 
+        printf("Error in transmission: Expected %d bytes, but received %d", resp_header->count, bytes_recd); 
+    }  
+    fflush(stdout); 
+    delete_pkt(resp_header); 
+    free(response);  
+    return ret; 
+       
+} 
 int main(void) {
 
    int sock_client;  /* Socket used by client */
@@ -76,19 +109,30 @@ int main(void) {
 
    printf("Enter the file you want to receive\n");
    scanf("%s", sentence);
-   msg_len = strlen(sentence) + 1;
+   msg_len = strlen(sentence);
    
    pkt_header_t* header = new_pkt((unsigned short)msg_len, seq_num); 
    /* send message */
    
-   bytes_sent = send(sock_client, header, sizeof(header), 0);
+   bytes_sent = send(sock_client, header, sizeof(pkt_header_t), 0);
+   printf("%s\n",sentence);    
+   bytes_sent = send(sock_client, &sentence, msg_len, 0);   
 
+   printf("bytes sent %d\n", bytes_sent);  
    /* get response from server */
-   bytes_recd = recv(sock_client, modifiedSentence, STRING_SIZE, 0); 
-
+   FILE* f = fopen("out.txt", "w"); 
+   while (recv_line(f, sock_client) != -1) {} 
+   
+   /*
+   pkt_header_t* resp_header = (pkt_header_t *)malloc(sizeof(pkt_header_t)); 
+   bytes_recd = recv(sock_client, header, sizeof(pkt_header_t), 0); 
+   char* response = (char *)malloc(header->count*sizeof(char)); 
+   
+   bytes_recd = recv(sock_client, response, header->count, 0); 
    printf("\nThe response from server is:\n");
-   printf("%s\n\n", modifiedSentence);
-   fflush(stdout); 
+   printf("%s", response);
+   fflush(stdout);
+   */  
    /* close the socket */
 
    close (sock_client);
