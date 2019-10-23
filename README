@@ -1,1 +1,16 @@
-#CISC450 Project 1 
+Group 8: 
+Landon Jones 
+Ben Conrad
+
+Executables: 
+tcpclient 
+tcpserver 
+
+Source Files: 
+tcpclient.c
+tcpserver.c
+pkt_header.c
+
+Scripts: 
+server_test
+client_test

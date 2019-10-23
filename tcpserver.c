@@ -10,10 +10,8 @@
 #include <netinet/in.h>     /* for sockaddr_in */
 #include <unistd.h>         /* for close */
 #include "pkt_header.h" 
-#include "str.h" 
-
 #define STRING_SIZE 1024   
-
+#define MAX_LINE 80 
 /* SERV_TCP_PORT is the port number on which the server listens for
    incoming requests from clients. You should change this to a different
    number to prevent conflicts with others in the class. */
@@ -39,7 +37,10 @@ int main(void) {
    unsigned int msg_len;  /* length of message */
    int bytes_sent, bytes_recd; /* number of bytes sent or received */
    unsigned int i;  /* temporary loop variable */
-   int seq_num = 0; 
+   
+   int seq_num; /* sequence number of the packet*/ 
+   int total_bytes_trans; /* total transmitted bytes*/ 
+   int total_packets; /* total packets transmitted*/ 
    /* open a socket */
 
    if ((sock_server = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
@@ -92,53 +93,46 @@ int main(void) {
       }
  
       /* receive the message */
-      pkt_header_t* pkt = (pkt_header_t*)malloc(sizeof(pkt_header_t)); 
-      bytes_recd = recv(sock_connection, pkt, sizeof(pkt_header_t), 0);
       
-      char filename[STRING_SIZE]; 
-      printf("file size %hu sequence num %hu", pkt->count, pkt->seq_num); 
-      bytes_recd = recv(sock_connection, &filename, pkt->count, 0); 
-      filename[pkt->count] = '\0'; 
-      printf("The filename is: %s and %d", filename, bytes_recd);  
-      fflush(stdout); 
-      FILE* f = fopen(filename, "r"); 
-      if (f == NULL ){
+      pkt_t* pkt = recv_pkt(sock_connection); 
+      printf("%s\n", pkt->content); 
+      FILE* f = fopen(pkt->content, "r"); 
+      
+      /* initiate values */ 
+      seq_num = 0; 
+      total_bytes_trans = 0; 
+      total_packets = 0; 
+      if (f == NULL){ 
           perror("Server: error opening file"); 
-	  close(sock_connection); 
+          pkt_header_t* EOT = send_pkt(sock_connection, "", strlen(""), ++seq_num); 
+          delete_pkt_header(EOT); 
+          close(sock_connection);
           continue; 
       } 
+      delete_pkt(pkt); 
       
-      fflush(stdout); 
-      if (bytes_recd > 0){
-         printf("Received Sentence is:\n");
-         printf("%d %d", pkt->seq_num, pkt->count);
-         printf("\nwith length %d\n\n", bytes_recd);
-	 
-        /* prepare the message to send */
-
-         msg_len = bytes_recd;
-
-         str_t* resp = readlines(f); 
-         int done = 0; 
-         while (!done){ 
-	     pkt_header_t* header = new_pkt(resp->num_chars, ++seq_num); 
-
-             /* send message */
- 	     bytes_sent = send(sock_connection, header, sizeof(pkt_header_t), 0); 
-             bytes_sent = send(sock_connection, resp->content, resp->num_chars, 0); 
-             if (resp->num_chars == 0){
-                 done = 1; 
-             }              
-             delete_str_t(resp); 
-             delete_pkt(header); 
-             resp = readlines(f); 
-             
-         } 
+      char input[MAX_LINE + 1]; /* input buffer*/ 
+      
+      while(fgets(input, MAX_LINE, f)){ /* while not EOF */ 
+         seq_num++; /* increment the seq num*/ 
+         pkt_header_t* header = send_pkt(sock_connection, input, strlen( input ), seq_num); /* send the line*/
          
-      }
+         /* print statistics */  
+         printf("Packet %hu transmitted with %hu data bytes\n", header->seq_num, header->count); 
+         
+         total_bytes_trans += header->count; /* increment the count to the host short*/ 
+         total_packets++; /* increment total packets transmitted */ 
+         delete_pkt_header(header); /* free the header*/ 
+      } 
+      pkt_header_t* EOT = send_pkt(sock_connection, "", strlen(""), 0); /* transmit the EOT*/ 
+      
+      printf("End of Transmission Packet with sequence number %hu sent with %hu data bytes\n", EOT->seq_num, EOT->count);       
+      /* print statistics*/ 
+      printf("There were %d packets transmitted and %d bytes transmitted\n", total_packets, total_bytes_trans); 
 
-      /* close the socket */
-
-      close(sock_connection);
-   } 
+      fclose(f); 
+      /* close the connection*/     
+      close(sock_connection); 
+      exit(0); /* exit after successful transmission */ 
+    } 
 }
